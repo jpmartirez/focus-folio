@@ -16,6 +16,8 @@
 # next.js
 /.next/
 /out/
+PROJECT_INFO.md
+
 
 # production
 /build
