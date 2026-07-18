@@ -8,6 +8,7 @@ import {
 import type { Metadata } from "next";
 import { Geist_Mono } from "next/font/google";
 import "./globals.css";
+import Link from "next/link";
 
 const geistMono = Geist_Mono({
 	variable: "--font-geist-mono",
@@ -33,23 +34,28 @@ export default function RootLayout({
 					<nav className="navbar">
 						<div className="navbar-inner">
 							{/* Logo */}
-							<a href="/" className="logo-text" style={{ textDecoration: "none" }}>
+							<Link
+								href="/"
+								className="logo-text"
+								style={{ textDecoration: "none" }}
+							>
 								FocusFolio
-							</a>
+							</Link>
 
 							{/* Nav Actions */}
 							<div className="navbar-actions">
 								<Show when="signed-out">
 									<SignInButton mode="modal">
-										<button className="btn btn-ghost">Sign in</button>
-									</SignInButton>
-									<SignUpButton mode="modal">
 										<button className="btn btn-primary">Get started</button>
-									</SignUpButton>
+									</SignInButton>
 								</Show>
 
 								<Show when="signed-in">
-									<a href="/dashboard" className="btn btn-ghost" style={{ textDecoration: "none" }}>
+									<a
+										href="/dashboard"
+										className="btn btn-ghost"
+										style={{ textDecoration: "none" }}
+									>
 										Dashboard
 									</a>
 									<UserButton />
@@ -59,16 +65,32 @@ export default function RootLayout({
 					</nav>
 
 					{/* ── Page Content ── */}
-					<main className="flex flex-col flex-1">
-						{children}
-					</main>
+					<main className="flex flex-col flex-1">{children}</main>
 
 					{/* ── Footer ── */}
 					<footer className="footer">
-						<div className="container" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
-							<span className="logo-text" style={{ fontSize: "1rem" }}>FocusFolio</span>
-							<p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: 0 }}>
-								© {new Date().getFullYear()} FocusFolio · Built by John Paul R. Martirez
+						<div
+							className="container"
+							style={{
+								display: "flex",
+								justifyContent: "space-between",
+								alignItems: "center",
+								flexWrap: "wrap",
+								gap: "0.5rem",
+							}}
+						>
+							<span className="logo-text" style={{ fontSize: "1rem" }}>
+								FocusFolio
+							</span>
+							<p
+								style={{
+									fontSize: "0.8125rem",
+									color: "var(--text-muted)",
+									margin: 0,
+								}}
+							>
+								© {new Date().getFullYear()} FocusFolio · Built by John Paul R.
+								Martirez
 							</p>
 						</div>
 					</footer>
