@@ -1,4 +1,4 @@
-import { ClerkProvider, SignInButton, UserButton, Show } from "@clerk/nextjs";
+import { ClerkProvider, UserButton, Show, SignUpButton } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import { Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -39,19 +39,19 @@ export default function RootLayout({
 							{/* Nav Actions */}
 							<div className="navbar-actions">
 								<Show when="signed-out">
-									<SignInButton mode="modal">
+									<SignUpButton mode="modal">
 										<button className="btn btn-primary">Get started</button>
-									</SignInButton>
+									</SignUpButton>
 								</Show>
 
 								<Show when="signed-in">
-									<a
-										href="/dashboard"
+									<Link
+										href="/"
 										className="btn btn-ghost"
 										style={{ textDecoration: "none" }}
 									>
 										Dashboard
-									</a>
+									</Link>
 									<UserButton />
 								</Show>
 							</div>
