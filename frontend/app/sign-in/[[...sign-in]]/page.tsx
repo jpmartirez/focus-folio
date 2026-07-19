@@ -13,7 +13,7 @@ export default function SignInPage() {
 				background: "var(--neutral-50)",
 			}}
 		>
-			<SignIn />
+			<SignIn path="/sign-in" />
 		</div>
 	);
 }

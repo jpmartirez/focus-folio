@@ -609,6 +609,26 @@ img, video {
   animation: float 4s ease-in-out infinite;
 }
 
+/* ============================================================
+   FLASHCARD — 3D Flip
+   ============================================================ */
+.flashcard-container {
+  position: relative;
+}
+
+.flashcard-inner {
+  position: relative;
+  width: 100%;
+  transform-style: preserve-3d;
+}
+
+.flashcard-face {
+  position: absolute;
+  inset: 0;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
 .dark {
   --background:  oklch(0.145 0 0);
   --foreground:  oklch(0.985 0 0);

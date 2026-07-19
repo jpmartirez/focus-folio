@@ -13,7 +13,7 @@ export default function SignUpPage() {
 				background: "var(--neutral-50)",
 			}}
 		>
-			<SignUp />
+			<SignUp path="/sign-up" />
 		</div>
 	);
 }
