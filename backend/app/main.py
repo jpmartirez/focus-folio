@@ -139,7 +139,7 @@ async def create_room(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    """Create a new study room. Uploads the PDF to Supabase Storage and ingests into ChromaDB."""
+    """Create a new study room. Uploads the PDF to Supabase Storage and ingests into Pinecone."""
     if not pdf_file.filename or not pdf_file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are accepted.")
 
@@ -177,7 +177,7 @@ async def create_room(
 
     room_id_str = str(new_room.id)
 
-    # Ingest PDF into ChromaDB (write to temp file for PyPDFLoader)
+    # Ingest PDF into Pinecone (write to temp file for PyPDFLoader)
     try:
         from . import rag
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
@@ -250,12 +250,12 @@ def delete_room(
         except Exception as e:
             logger.warning(f"Could not remove file from Supabase Storage: {e}")
 
-    # Remove ChromaDB vectors
+    # Remove Pinecone vectors (deletes the entire namespace for this room)
     try:
         from . import rag
         rag.delete_room_vectors(room_id)
     except Exception as e:
-        logger.warning(f"Could not delete ChromaDB vectors for room {room_id}: {e}")
+        logger.warning(f"Could not delete Pinecone vectors for room {room_id}: {e}")
 
     # DB cascade handles ChatMessage, Exam, Flashcard via ondelete=CASCADE
     db.delete(room)

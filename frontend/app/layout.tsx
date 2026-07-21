@@ -4,8 +4,9 @@ import { Geist_Mono, Geist } from "next/font/google";
 import "./globals.css";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import ConditionalFooter from "./components/ConditionalFooter";
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 const geistMono = Geist_Mono({
 	variable: "--font-geist-mono",
@@ -64,33 +65,8 @@ export default function RootLayout({
 					{/* ── Page Content ── */}
 					<main className="flex flex-col flex-1">{children}</main>
 
-					{/* ── Footer ── */}
-					<footer className="footer">
-						<div
-							className="container"
-							style={{
-								display: "flex",
-								justifyContent: "space-between",
-								alignItems: "center",
-								flexWrap: "wrap",
-								gap: "0.5rem",
-							}}
-						>
-							<span className="logo-text" style={{ fontSize: "1rem" }}>
-								FocusFolio
-							</span>
-							<p
-								style={{
-									fontSize: "0.8125rem",
-									color: "var(--text-muted)",
-									margin: 0,
-								}}
-							>
-								© {new Date().getFullYear()} FocusFolio · Built by John Paul R.
-								Martirez
-							</p>
-						</div>
-					</footer>
+					{/* ── Footer (hidden on /room/* pages) ── */}
+					<ConditionalFooter />
 				</ClerkProvider>
 			</body>
 		</html>

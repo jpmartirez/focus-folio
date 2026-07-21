@@ -1,19 +1,9 @@
-"""
-rag.py — Core RAG module for FocusFolio.
 
-Handles:
-- PDF ingestion → ChromaDB vector store
-- Context-restricted chat chain (LangChain + Gemma via Google AI Studio)
-- Structured exam generation (MCQ)
-- Structured flashcard generation
-"""
 
 import os
 import json
 import re
 import logging
-from pathlib import Path
-
 
 from dotenv import load_dotenv
 
@@ -22,24 +12,69 @@ load_dotenv()
 # ── LangChain imports ───────────────────────────────────────────────────────
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_chroma import Chroma
 from langchain_google_genai import (
     ChatGoogleGenerativeAI,
     GoogleGenerativeAIEmbeddings,
 )
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from langchain_pinecone import PineconeVectorStore
+
+# ── Pinecone imports ────────────────────────────────────────────────────────
+from pinecone import Pinecone, ServerlessSpec
 
 logger = logging.getLogger(__name__)
 
-CHROMA_PERSIST_DIR = str(Path(__file__).parent.parent / "chroma_db")
+# ── Configuration ────────────────────────────────────────────────────────────
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 
 EMBEDDING_MODEL = "models/gemini-embedding-2"
+# gemini-embedding-2 outputs 3072-dimensional vectors
+EMBEDDING_DIMENSION = 3072
+PINECONE_INDEX_NAME = "focusfolio-lessons"
+
 # Model name for Google AI Studio — user specified gemma-4-31b-it
 # If that exact name is not yet available via the API, try: "gemma-2-9b-it" or "gemini-2.0-flash"
 CHAT_MODEL = os.getenv("GOOGLE_CHAT_MODEL", "gemma-4-31b-it")
 
+
+# ── Pinecone client & index ──────────────────────────────────────────────────
+def _get_pinecone_client() -> Pinecone:
+    """Return an authenticated Pinecone client."""
+    if not PINECONE_API_KEY:
+        raise ValueError("PINECONE_API_KEY environment variable is missing!")
+    return Pinecone(api_key=PINECONE_API_KEY)
+
+
+def _ensure_pinecone_index() -> None:
+    """
+    Create the Pinecone index if it does not already exist, then wait
+    until the index is fully ready before returning.
+    Uses cosine similarity with the dimension of gemini-embedding-2 (3072).
+    This function is idempotent — safe to call on every startup.
+    """
+    import time
+    pc = _get_pinecone_client()
+    if not pc.has_index(PINECONE_INDEX_NAME):
+        logger.info(f"Creating Pinecone index '{PINECONE_INDEX_NAME}'...")
+        pc.create_index(
+            name=PINECONE_INDEX_NAME,
+            dimension=EMBEDDING_DIMENSION,
+            metric="cosine",
+            spec=ServerlessSpec(cloud="aws", region="us-east-1"),
+        )
+        # Serverless indexes take a few seconds to initialize.
+        # Poll until the index reports ready=True before returning.
+        logger.info(f"Waiting for Pinecone index '{PINECONE_INDEX_NAME}' to be ready...")
+        while not pc.describe_index(PINECONE_INDEX_NAME).status.get("ready", False):
+            time.sleep(1)
+        logger.info(f"Pinecone index '{PINECONE_INDEX_NAME}' is ready.")
+    else:
+        logger.debug(f"Pinecone index '{PINECONE_INDEX_NAME}' already exists and is ready.")
+
+
+# ── Shared model helpers ─────────────────────────────────────────────────────
 def _get_embeddings() -> GoogleGenerativeAIEmbeddings:
     return GoogleGenerativeAIEmbeddings(
         model=EMBEDDING_MODEL,
@@ -55,18 +90,26 @@ def _get_llm() -> ChatGoogleGenerativeAI:
     )
 
 
-def _get_vectorstore() -> Chroma:
-    return Chroma(
-        collection_name="focusfolio_lessons",
-        persist_directory=CHROMA_PERSIST_DIR,
-        embedding_function=_get_embeddings(),
+def _get_vectorstore(namespace: str) -> PineconeVectorStore:
+    """
+    Return a PineconeVectorStore scoped to the given namespace (room_id).
+    Each room is fully isolated within its own Pinecone namespace.
+    """
+    _ensure_pinecone_index()
+    pc = _get_pinecone_client()
+    index = pc.Index(PINECONE_INDEX_NAME)
+    return PineconeVectorStore(
+        index=index,
+        embedding=_get_embeddings(),
+        namespace=namespace,
     )
 
 
 # ── Ingestion ────────────────────────────────────────────────────────────────
 def ingest_pdf(room_id: str, pdf_path: str) -> int:
     """
-    Load a PDF from disk, split into chunks, embed, and store in ChromaDB.
+    Load a PDF from disk, split into chunks, embed, and store in Pinecone.
+    Each room uses its own Pinecone namespace (namespace = room_id).
     Returns the number of chunks stored.
     """
     loader = PyPDFLoader(pdf_path)
@@ -79,7 +122,7 @@ def ingest_pdf(room_id: str, pdf_path: str) -> int:
     )
     chunks = splitter.split_documents(pages)
 
-    # Tag every chunk with the room_id so we can filter later
+    # Tag every chunk with the room_id for reference (also isolated via namespace)
     for chunk in chunks:
         chunk.metadata["room_id"] = str(room_id)
 
@@ -87,40 +130,86 @@ def ingest_pdf(room_id: str, pdf_path: str) -> int:
         logger.warning(f"No chunks extracted for room {room_id}")
         return 0
 
-    vectorstore = _get_vectorstore()
+    vectorstore = _get_vectorstore(namespace=str(room_id))
     vectorstore.add_documents(chunks)
 
-    logger.info(f"Ingested {len(chunks)} chunks for room {room_id}")
+    logger.info(f"Ingested {len(chunks)} chunks into Pinecone namespace '{room_id}'")
     return len(chunks)
 
 
 def delete_room_vectors(room_id: str) -> None:
-    """Remove all ChromaDB documents tagged with the given room_id."""
     try:
-        vectorstore = _get_vectorstore()
-        results = vectorstore.get(where={"room_id": room_id})
-        ids = results.get("ids", [])
-        if ids:
-            vectorstore.delete(ids=ids)
-            logger.info(f"Deleted {len(ids)} vectors for room {room_id}")
+        _ensure_pinecone_index()
+        pc = _get_pinecone_client()
+        index = pc.Index(PINECONE_INDEX_NAME)
+        # Delete all vectors in the namespace belonging to this room
+        index.delete(delete_all=True, namespace=str(room_id))
+        logger.info(f"Deleted all Pinecone vectors for namespace (room) '{room_id}'")
     except Exception as e:
-        logger.error(f"Failed to delete vectors for room {room_id}: {e}")
+        logger.error(f"Failed to delete Pinecone vectors for room {room_id}: {e}")
 
 
 # ── Retriever ────────────────────────────────────────────────────────────────
 def _get_retriever(room_id: str):
-    vectorstore = _get_vectorstore()
+    
+    vectorstore = _get_vectorstore(namespace=str(room_id))
     return vectorstore.as_retriever(
         search_type="similarity",
-        search_kwargs={
-            "k": 6,
-            "filter": {"room_id": str(room_id)}, 
-        },
+        search_kwargs={"k": 6},
     )
 
 
 def _format_docs(docs) -> str:
     return "\n\n---\n\n".join(doc.page_content for doc in docs)
+
+
+def _fetch_all_chunks_for_room(room_id: str, limit: int = 15) -> list[str]:
+    try:
+        _ensure_pinecone_index()
+        pc = _get_pinecone_client()
+        index = pc.Index(PINECONE_INDEX_NAME)
+
+        # index.list() yields PAGES of IDs (each page is a list of str).
+        # Flatten pages until we have enough IDs.
+        id_list: list[str] = []
+        for page in index.list(namespace=str(room_id)):
+            if isinstance(page, list):
+                # Each page is already a list of string IDs
+                id_list.extend(page)
+            elif isinstance(page, str):
+                id_list.append(page)
+            elif hasattr(page, "id"):
+                id_list.append(page.id)
+            if len(id_list) >= limit:
+                break
+
+        id_list = id_list[:limit]
+
+        if not id_list:
+            logger.warning(f"No vectors found in Pinecone namespace '{room_id}'")
+            return []
+
+        # Pinecone SDK v7: fetch() returns a FetchResponse object, NOT a dict.
+        # Access vectors via attribute: fetch_response.vectors (dict[str, Vector])
+        fetch_response = index.fetch(ids=id_list, namespace=str(room_id))
+        vectors = fetch_response.vectors  # FetchResponse attribute, not .get()
+
+        # Extract text — LangChain stores page_content under the "text" metadata key.
+        # Vector.metadata is a plain dict, so .get() is valid there.
+        chunks = []
+        for vec_id, vec_data in vectors.items():
+            metadata = vec_data.metadata or {}
+            text = metadata.get("text", "")
+            if text:
+                chunks.append(text)
+
+        logger.info(f"Fetched {len(chunks)} chunks from Pinecone namespace '{room_id}'")
+        return chunks
+
+    except Exception as e:
+        logger.error(f"Failed to fetch chunks for room {room_id} from Pinecone: {e}")
+        return []
+
 
 
 # ── Chat ─────────────────────────────────────────────────────────────────────
@@ -137,15 +226,11 @@ Context from lesson document:
 
 
 def chat(room_id: str, question: str, history: list[dict]) -> str:
-    """
-    Run a RAG-grounded chat query for the given room.
-    history: list of {{"role": "user"|"assistant", "content": str}}
-    Returns the assistant's reply as a string.
-    """
+   
     retriever = _get_retriever(room_id)
     llm = _get_llm()
 
-    # Retrieve relevant context
+    # Retrieve relevant context from Pinecone
     docs = retriever.invoke(question)
     context = _format_docs(docs)
 
@@ -186,22 +271,17 @@ Lesson content:
 
 
 def generate_exam(room_id: str) -> list[dict]:
-    """
-    Generate 10 MCQ questions using all document chunks belonging to the room.
-    """
-    vectorstore = _get_vectorstore()
+   
     llm = _get_llm()
 
-    # FIX: Bypass broken similarity search; pull raw chunks assigned to this room
-    db_results = vectorstore.get(where={"room_id": str(room_id)})
-    page_contents = db_results.get("documents", [])
-    
+    page_contents = _fetch_all_chunks_for_room(room_id, limit=15)
+
     if not page_contents:
-        logger.error(f"Cannot generate exam: No content found in Chroma for room {room_id}")
+        logger.error(f"Cannot generate exam: No content found in Pinecone for room {room_id}")
         return []
-        
+
     # Join up to a safe threshold of text chunks to fit context limits
-    context = "\n\n---\n\n".join(page_contents[:15]) 
+    context = "\n\n---\n\n".join(page_contents[:15])
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", EXAM_SYSTEM_PROMPT),
@@ -245,20 +325,15 @@ Lesson content:
 
 
 def generate_flashcards(room_id: str) -> list[dict]:
-    """
-    Generate 15 flashcards using all document chunks belonging to the room.
-    """
-    vectorstore = _get_vectorstore()
+    
     llm = _get_llm()
 
-    # FIX: Pull chunks directly via metadata filter matching
-    db_results = vectorstore.get(where={"room_id": str(room_id)})
-    page_contents = db_results.get("documents", [])
-    
+    page_contents = _fetch_all_chunks_for_room(room_id, limit=15)
+
     if not page_contents:
-        logger.error(f"Cannot generate flashcards: No content found in Chroma for room {room_id}")
+        logger.error(f"Cannot generate flashcards: No content found in Pinecone for room {room_id}")
         return []
-        
+
     context = "\n\n---\n\n".join(page_contents[:15])
 
     prompt = ChatPromptTemplate.from_messages([

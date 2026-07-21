@@ -11,6 +11,8 @@ import {
 	Layers,
 	Loader2,
 	AlertCircle,
+	FileText,
+	BookOpen,
 } from "lucide-react";
 import { getRoom } from "@/app/lib/api";
 import type { Room } from "@/app/lib/types";
@@ -19,12 +21,18 @@ import ChatPanel from "./components/ChatPanel";
 import ExamPanel from "./components/ExamPanel";
 import FlashcardsPanel from "./components/FlashcardsPanel";
 
-type Tab = "chat" | "exam" | "flashcards";
+type StudyTab = "chat" | "exam" | "flashcards";
+type MobilePanel = "document" | "tools";
 
-const TABS: { id: Tab; label: string; Icon: React.ElementType }[] = [
+const STUDY_TABS: { id: StudyTab; label: string; Icon: React.ElementType }[] = [
 	{ id: "chat", label: "Chat", Icon: MessageSquare },
 	{ id: "exam", label: "Exam", Icon: ClipboardList },
 	{ id: "flashcards", label: "Flashcards", Icon: Layers },
+];
+
+const MOBILE_PANELS: { id: MobilePanel; label: string; Icon: React.ElementType }[] = [
+	{ id: "document", label: "Document", Icon: FileText },
+	{ id: "tools", label: "Study Tools", Icon: BookOpen },
 ];
 
 export default function RoomPage() {
@@ -35,7 +43,8 @@ export default function RoomPage() {
 	const [room, setRoom] = useState<Room | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-	const [activeTab, setActiveTab] = useState<Tab>("chat");
+	const [activeStudyTab, setActiveStudyTab] = useState<StudyTab>("chat");
+	const [activeMobilePanel, setActiveMobilePanel] = useState<MobilePanel>("document");
 
 	useEffect(() => {
 		if (!userId || !roomId) return;
@@ -93,30 +102,69 @@ export default function RoomPage() {
 		);
 	}
 
-	// ── Main workspace ───────────────────────────────────────────────────────
-	return (
-		<div
-			className="flex flex-col"
-			style={{ height: "calc(100vh - 64px - 73px)" }}
-		>
-			{/* ── Top bar ─────────────────────────────────────────────────── */}
-			<div className="flex flex-shrink-0 items-center gap-3 border-b border-border bg-white px-5 py-2.5">
-				<Link
-					href="/"
-					className="inline-flex items-center gap-1.5 text-[0.8125rem] font-medium text-text-muted no-underline transition-colors duration-150 hover:text-text-primary"
-				>
-					<ArrowLeft className="h-3.5 w-3.5" />
-					Dashboard
-				</Link>
-				<div className="h-4 w-px bg-border" />
-				<span className="text-[0.9375rem] font-semibold text-text-primary tracking-tight">
-					{room.title}
-				</span>
+	// ── Shared top bar ───────────────────────────────────────────────────────
+	const TopBar = (
+		<div className="flex flex-shrink-0 items-center gap-3 border-b border-border bg-white px-4 py-2.5">
+			<Link
+				href="/"
+				className="inline-flex items-center gap-1.5 text-[0.8125rem] font-medium text-text-muted no-underline transition-colors duration-150 hover:text-text-primary"
+			>
+				<ArrowLeft className="h-3.5 w-3.5" />
+				Dashboard
+			</Link>
+			<div className="h-4 w-px bg-border" />
+			<span className="text-[0.9375rem] font-semibold text-text-primary tracking-tight truncate">
+				{room.title}
+			</span>
+		</div>
+	);
+
+	// ── Study tools panel (shared between desktop right panel and mobile) ────
+	const StudyToolsContent = (
+		<div className="flex flex-1 flex-col overflow-hidden">
+			{/* Study tab bar */}
+			<div className="flex flex-shrink-0 border-b border-border bg-white px-3">
+				{STUDY_TABS.map(({ id, label, Icon }) => (
+					<button
+						key={id}
+						onClick={() => setActiveStudyTab(id)}
+						className={`relative flex items-center gap-1.5 px-4 py-3 text-[0.8125rem] font-medium transition-colors ${
+							activeStudyTab === id
+								? "text-brand-600"
+								: "text-text-muted hover:text-text-secondary"
+						}`}
+					>
+						<Icon className="h-3.5 w-3.5" />
+						{label}
+						{activeStudyTab === id && (
+							<span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-brand-600" />
+						)}
+					</button>
+				))}
 			</div>
 
-			{/* ── Split view ──────────────────────────────────────────────── */}
-			<div className="flex flex-1 overflow-hidden">
+			{/* Study tab content */}
+			<div className="flex-1 overflow-hidden">
+				{activeStudyTab === "chat" && userId && (
+					<ChatPanel userId={userId} roomId={roomId} />
+				)}
+				{activeStudyTab === "exam" && userId && (
+					<ExamPanel userId={userId} roomId={roomId} />
+				)}
+				{activeStudyTab === "flashcards" && userId && (
+					<FlashcardsPanel userId={userId} roomId={roomId} />
+				)}
+			</div>
+		</div>
+	);
 
+	// ── Main workspace ───────────────────────────────────────────────────────
+	return (
+		<div className="flex flex-col" style={{ height: "calc(100vh - 64px)" }}>
+			{TopBar}
+
+			{/* ── DESKTOP layout (lg+): side-by-side ─────────────────────── */}
+			<div className="hidden lg:flex flex-1 overflow-hidden">
 				{/* Left panel — PDF viewer */}
 				<div
 					className="flex flex-col border-r border-border"
@@ -126,42 +174,41 @@ export default function RoomPage() {
 				</div>
 
 				{/* Right panel — Study tools */}
-				<div className="flex flex-1 flex-col overflow-hidden">
+				{StudyToolsContent}
+			</div>
 
-					{/* Tab bar */}
-					<div className="flex flex-shrink-0 border-b border-border bg-white px-3">
-						{TABS.map(({ id, label, Icon }) => (
-							<button
-								key={id}
-								onClick={() => setActiveTab(id)}
-								className={`relative flex items-center gap-1.5 px-4 py-3 text-[0.8125rem] font-medium transition-colors ${
-									activeTab === id
-										? "text-brand-600"
-										: "text-text-muted hover:text-text-secondary"
-								}`}
-							>
-								<Icon className="h-3.5 w-3.5" />
-								{label}
-								{/* Active indicator */}
-								{activeTab === id && (
-									<span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-brand-600" />
-								)}
-							</button>
-						))}
-					</div>
+			{/* ── MOBILE / TABLET layout (< lg): tabbed panels ───────────── */}
+			<div className="flex lg:hidden flex-col flex-1 overflow-hidden">
+				{/* Mobile panel switcher tab bar */}
+				<div className="flex flex-shrink-0 border-b border-border bg-white">
+					{MOBILE_PANELS.map(({ id, label, Icon }) => (
+						<button
+							key={id}
+							onClick={() => setActiveMobilePanel(id)}
+							className={`relative flex flex-1 items-center justify-center gap-2 py-3 text-[0.8125rem] font-semibold transition-colors ${
+								activeMobilePanel === id
+									? "text-brand-600"
+									: "text-text-muted hover:text-text-secondary"
+							}`}
+						>
+							<Icon className="h-4 w-4" />
+							{label}
+							{activeMobilePanel === id && (
+								<span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-brand-600" />
+							)}
+						</button>
+					))}
+				</div>
 
-					{/* Tab content */}
-					<div className="flex-1 overflow-hidden">
-						{activeTab === "chat" && userId && (
-							<ChatPanel userId={userId} roomId={roomId} />
-						)}
-						{activeTab === "exam" && userId && (
-							<ExamPanel userId={userId} roomId={roomId} />
-						)}
-						{activeTab === "flashcards" && userId && (
-							<FlashcardsPanel userId={userId} roomId={roomId} />
-						)}
-					</div>
+				{/* Mobile panel content */}
+				<div className="flex flex-1 overflow-hidden">
+					{activeMobilePanel === "document" ? (
+						<div className="flex flex-1 flex-col">
+							<PdfViewer pdfUrl={room.pdf_url} />
+						</div>
+					) : (
+						StudyToolsContent
+					)}
 				</div>
 			</div>
 		</div>

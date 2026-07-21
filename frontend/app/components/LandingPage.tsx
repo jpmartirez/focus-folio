@@ -196,16 +196,40 @@ export default function LandingPage() {
 							</span>
 						</div>
 
+						{/* ── Mobile panel switcher (visible only on small screens) ── */}
+						<div className="flex md:hidden border-b border-border bg-white">
+							{[
+								{ label: "📄 Document", active: false },
+								{ label: "📖 Study Tools", active: true },
+							].map(({ label, active }) => (
+								<div
+									key={label}
+									style={{
+										flex: 1,
+										padding: "0.75rem 0.5rem",
+										textAlign: "center",
+										fontSize: "0.8125rem",
+										fontWeight: active ? 600 : 400,
+										color: active ? "var(--brand-600)" : "var(--text-muted)",
+										borderBottom: active ? "2px solid var(--brand-500)" : "2px solid transparent",
+										cursor: "default",
+									}}
+								>
+									{label}
+								</div>
+							))}
+						</div>
+
 						{/* Split layout preview */}
-						<div style={{ display: "flex", minHeight: "320px" }}>
-							{/* Left: PDF panel */}
+						<div className="flex flex-col md:flex-row" style={{ minHeight: "320px" }}>
+
+							{/* Left: PDF panel — hidden on mobile, visible on md+ */}
 							<div
+								className="hidden md:flex flex-col"
 								style={{
 									flex: "0 0 42%",
 									borderRight: "1px solid var(--border)",
 									padding: "1.25rem",
-									display: "flex",
-									flexDirection: "column",
 									gap: "0.5rem",
 								}}
 							>
@@ -235,7 +259,7 @@ export default function LandingPage() {
 								))}
 							</div>
 
-							{/* Right: Tools panel */}
+							{/* Right: Tools panel — full width on mobile, 58% on desktop */}
 							<div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
 								{/* Tabs */}
 								<div
