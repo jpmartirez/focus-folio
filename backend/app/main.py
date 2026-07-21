@@ -22,13 +22,13 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="FocusFolio Study Room API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ── Supabase Storage client ──────────────────────────────────────────────────
+#  Supabase Storage client 
 def get_supabase() -> Client:
     url = os.getenv("SUPABASE_URL")
     key = os.getenv("SUPABASE_SERVICE_KEY")
@@ -40,7 +40,7 @@ def get_supabase() -> Client:
 STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "study_lessons")
 
 
-# ── Auth helper ──────────────────────────────────────────────────────────────
+#  Auth helper 
 def get_current_user_id(x_clerk_user_id: str = Header(None)) -> str:
     if not x_clerk_user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -55,7 +55,7 @@ def ensure_user_exists(user_id: str, db: Session):
         db.commit()
 
 
-# ── Health ───────────────────────────────────────────────────────────────────
+#  Health 
 @app.get("/")
 def read_root():
     return {"status": "FocusFolio backend is running!"}
@@ -70,7 +70,7 @@ def test_db_connection(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Database connection failed: {str(e)}")
 
 
-# ── Clerk Webhook ─────────────────────────────────────────────────────────────
+#  Clerk Webhook 
 @app.post("/webhooks/clerk")
 async def clerk_webhook(request: Request, db: Session = Depends(get_db)):
     headers = request.headers
@@ -105,10 +105,7 @@ async def clerk_webhook(request: Request, db: Session = Depends(get_db)):
     return {"status": "success"}
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # ROOMS
-# ══════════════════════════════════════════════════════════════════════════════
-
 @app.get("/rooms")
 def get_rooms(
     db: Session = Depends(get_db),
@@ -263,10 +260,8 @@ def delete_room(
     return None
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# CHAT
-# ══════════════════════════════════════════════════════════════════════════════
 
+# CHAT
 class ChatRequest(BaseModel):
     question: str
 
@@ -337,10 +332,8 @@ def chat_with_room(
     }
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# EXAM
-# ══════════════════════════════════════════════════════════════════════════════
 
+# EXAM
 @app.get("/rooms/{room_id}/exam")
 def get_exam(
     room_id: str,
@@ -397,10 +390,8 @@ def generate_exam(
     }
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# FLASHCARDS
-# ══════════════════════════════════════════════════════════════════════════════
 
+# FLASHCARDS
 @app.get("/rooms/{room_id}/flashcards")
 def get_flashcards(
     room_id: str,
@@ -469,7 +460,7 @@ def generate_flashcards(
     }
 
 
-# ── Shared helper ─────────────────────────────────────────────────────────────
+#  Shared helper 
 def _get_room_or_404(room_id: str, user_id: str, db: Session) -> models.Room:
     room = db.query(models.Room).filter(
         models.Room.id == room_id,
