@@ -20,12 +20,15 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_pinecone import PineconeVectorStore
 
-# ── Pinecone imports ────────────────────────────────────────────────────────
+# Pinecone imports
 from pinecone import Pinecone, ServerlessSpec
 
+# Configure the module logger so it always outputs at INFO level via uvicorn
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
-# ── Configuration ────────────────────────────────────────────────────────────
+# Configuration
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 
@@ -39,7 +42,7 @@ PINECONE_INDEX_NAME = "focusfolio-lessons"
 CHAT_MODEL = os.getenv("GOOGLE_CHAT_MODEL", "gemma-4-31b-it")
 
 
-# ── Pinecone client & index ──────────────────────────────────────────────────
+# Pinecone client & index
 def _get_pinecone_client() -> Pinecone:
     """Return an authenticated Pinecone client."""
     if not PINECONE_API_KEY:
@@ -48,12 +51,7 @@ def _get_pinecone_client() -> Pinecone:
 
 
 def _ensure_pinecone_index() -> None:
-    """
-    Create the Pinecone index if it does not already exist, then wait
-    until the index is fully ready before returning.
-    Uses cosine similarity with the dimension of gemini-embedding-2 (3072).
-    This function is idempotent — safe to call on every startup.
-    """
+    
     import time
     pc = _get_pinecone_client()
     if not pc.has_index(PINECONE_INDEX_NAME):
@@ -64,8 +62,7 @@ def _ensure_pinecone_index() -> None:
             metric="cosine",
             spec=ServerlessSpec(cloud="aws", region="us-east-1"),
         )
-        # Serverless indexes take a few seconds to initialize.
-        # Poll until the index reports ready=True before returning.
+        
         logger.info(f"Waiting for Pinecone index '{PINECONE_INDEX_NAME}' to be ready...")
         while not pc.describe_index(PINECONE_INDEX_NAME).status.get("ready", False):
             time.sleep(1)
@@ -74,7 +71,6 @@ def _ensure_pinecone_index() -> None:
         logger.debug(f"Pinecone index '{PINECONE_INDEX_NAME}' already exists and is ready.")
 
 
-# ── Shared model helpers ─────────────────────────────────────────────────────
 def _get_embeddings() -> GoogleGenerativeAIEmbeddings:
     return GoogleGenerativeAIEmbeddings(
         model=EMBEDDING_MODEL,
@@ -91,10 +87,7 @@ def _get_llm() -> ChatGoogleGenerativeAI:
 
 
 def _get_vectorstore(namespace: str) -> PineconeVectorStore:
-    """
-    Return a PineconeVectorStore scoped to the given namespace (room_id).
-    Each room is fully isolated within its own Pinecone namespace.
-    """
+    
     _ensure_pinecone_index()
     pc = _get_pinecone_client()
     index = pc.Index(PINECONE_INDEX_NAME)
@@ -105,13 +98,9 @@ def _get_vectorstore(namespace: str) -> PineconeVectorStore:
     )
 
 
-# ── Ingestion ────────────────────────────────────────────────────────────────
+# Ingestion
 def ingest_pdf(room_id: str, pdf_path: str) -> int:
-    """
-    Load a PDF from disk, split into chunks, embed, and store in Pinecone.
-    Each room uses its own Pinecone namespace (namespace = room_id).
-    Returns the number of chunks stored.
-    """
+    
     loader = PyPDFLoader(pdf_path)
     pages = loader.load()
 
@@ -149,13 +138,15 @@ def delete_room_vectors(room_id: str) -> None:
         logger.error(f"Failed to delete Pinecone vectors for room {room_id}: {e}")
 
 
-# ── Retriever ────────────────────────────────────────────────────────────────
+
 def _get_retriever(room_id: str):
-    
     vectorstore = _get_vectorstore(namespace=str(room_id))
     return vectorstore.as_retriever(
-        search_type="similarity",
-        search_kwargs={"k": 6},
+        search_type="similarity_score_threshold",
+        search_kwargs={
+            "k": 6,
+            "score_threshold": 0.80,
+        },
     )
 
 
@@ -212,32 +203,43 @@ def _fetch_all_chunks_for_room(room_id: str, limit: int = 15) -> list[str]:
 
 
 
-# ── Chat ─────────────────────────────────────────────────────────────────────
-CHAT_SYSTEM_PROMPT = """You are a focused study assistant. Your ONLY job is to answer questions about the lesson document provided below.
 
-STRICT RULES:
-1. Answer ONLY using information from the provided context.
-2. If the question is unrelated to the document, respond with: "I can only answer questions about the lesson material."
+CHAT_SYSTEM_PROMPT = """You are a helpful study assistant. Use the lesson context below to answer the user's question.
+
+Rules:
+1. Base your answer on the provided context. Quote or paraphrase relevant parts when useful.
+2. If the context genuinely contains no information relevant to the question, respond with: "I can only answer questions about the lesson material."
 3. Be concise, clear, and educational.
-4. Do not make up information beyond what the context provides.
+4. Do not invent facts not present in the context.
 
-Context from lesson document:
+Lesson context:
 {context}"""
 
 
 def chat(room_id: str, question: str, history: list[dict]) -> str:
-   
     retriever = _get_retriever(room_id)
     llm = _get_llm()
 
     # Retrieve relevant context from Pinecone
     docs = retriever.invoke(question)
+
+    # Early exit: no chunks found — skip the LLM entirely to save tokens
+    if not docs:
+        logger.info(f"No relevant chunks retrieved for room {room_id} — skipping LLM call.")
+        return (
+            "I couldn't find anything in the lesson material related to your question. "
+            "Try asking something directly covered in the uploaded document — "
+            "like a concept, definition, or topic from the PDF."
+        )
+
+    logger.info(f"Retrieved {len(docs)} chunks for room {room_id}")
     context = _format_docs(docs)
+    logger.info(f"Context length: {len(context)} chars. Preview (first 300 chars): {context[:300]}")
 
     # Build message history for the prompt
     messages = [("system", CHAT_SYSTEM_PROMPT)]
 
-    for msg in history[-10:]:  # Last 10 messages for context window management
+    for msg in history[-10:]:
         role = "human" if msg["role"] == "user" else "ai"
         messages.append((role, msg["content"]))
 
@@ -250,7 +252,7 @@ def chat(room_id: str, question: str, history: list[dict]) -> str:
     return response
 
 
-# ── Exam Generation ──────────────────────────────────────────────────────────
+# Exam Generation
 EXAM_SYSTEM_PROMPT = """You are an expert educator creating a multiple-choice exam based on the provided lesson material.
 
 Generate exactly 10 multiple-choice questions based on the content below.

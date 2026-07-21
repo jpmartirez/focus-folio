@@ -243,7 +243,7 @@ export default function CreateRoomModal({
 							type="submit"
 							disabled={loading}
 							id="create-room-submit"
-							className="btn btn-primary min-w-[120px] rounded-md"
+							className="btn btn-primary min-w-30 rounded-md"
 						>
 							{loading ? (
 								<>

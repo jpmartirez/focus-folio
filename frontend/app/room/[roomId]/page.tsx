@@ -104,7 +104,7 @@ export default function RoomPage() {
 
 	// ── Shared top bar ───────────────────────────────────────────────────────
 	const TopBar = (
-		<div className="flex flex-shrink-0 items-center gap-3 border-b border-border bg-white px-4 py-2.5">
+		<div className="flex shrink-0 items-center gap-3 border-b border-border bg-white px-4 py-2.5">
 			<Link
 				href="/"
 				className="inline-flex items-center gap-1.5 text-[0.8125rem] font-medium text-text-muted no-underline transition-colors duration-150 hover:text-text-primary"
@@ -123,7 +123,7 @@ export default function RoomPage() {
 	const StudyToolsContent = (
 		<div className="flex flex-1 flex-col overflow-hidden">
 			{/* Study tab bar */}
-			<div className="flex flex-shrink-0 border-b border-border bg-white px-3">
+			<div className="flex shrink-0 border-b border-border bg-white px-3">
 				{STUDY_TABS.map(({ id, label, Icon }) => (
 					<button
 						key={id}
@@ -180,7 +180,7 @@ export default function RoomPage() {
 			{/* ── MOBILE / TABLET layout (< lg): tabbed panels ───────────── */}
 			<div className="flex lg:hidden flex-col flex-1 overflow-hidden">
 				{/* Mobile panel switcher tab bar */}
-				<div className="flex flex-shrink-0 border-b border-border bg-white">
+				<div className="flex shrink-0 border-b border-border bg-white">
 					{MOBILE_PANELS.map(({ id, label, Icon }) => (
 						<button
 							key={id}
