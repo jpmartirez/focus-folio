@@ -244,14 +244,14 @@ function QuestionCard({ index, question, selected, submitted, onSelect }: Questi
 							className={optionClass}
 						>
 							{submitted && showCorrect && (
-								<CheckCircle className="h-4 w-4 flex-shrink-0 text-green-600" />
+								<CheckCircle className="h-4 w-4 shrink-0 text-green-600" />
 							)}
 							{submitted && isWrong && (
-								<XCircle className="h-4 w-4 flex-shrink-0 text-red-500" />
+								<XCircle className="h-4 w-4 shrink-0 text-red-500" />
 							)}
 							{!submitted && (
 								<span
-									className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border text-[0.65rem] font-semibold ${
+									className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[0.65rem] font-semibold ${
 										isSelected
 											? "border-brand-500 bg-brand-500 text-white"
 											: "border-neutral-300 text-neutral-400"

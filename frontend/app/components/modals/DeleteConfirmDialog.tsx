@@ -63,7 +63,7 @@ export default function DeleteConfirmDialog({
 						onClick={onConfirm}
 						disabled={deleting}
 						id="confirm-delete-btn"
-						className="min-w-[120px] rounded-md bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500/30"
+						className="min-w-30 rounded-md bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500/30"
 					>
 						{deleting ? (
 							<>

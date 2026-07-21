@@ -132,7 +132,7 @@ export default function ChatPanel({ userId, roomId }: ChatPanelProps) {
 					<button
 						onClick={handleSend}
 						disabled={loading || !input.trim()}
-						className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white transition-all hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed"
+						className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white transition-all hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed"
 						aria-label="Send message"
 					>
 						{loading ? (
@@ -156,7 +156,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 		<div className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
 			{/* Avatar */}
 			<div
-				className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-white ${
+				className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white ${
 					isUser ? "bg-brand-600" : "bg-neutral-200"
 				}`}
 			>
@@ -184,7 +184,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 function TypingIndicator() {
 	return (
 		<div className="flex gap-2.5">
-			<div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-neutral-200">
+			<div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-200">
 				<Bot className="h-3.5 w-3.5 text-text-secondary" />
 			</div>
 			<div className="flex items-center gap-1.5 rounded-2xl rounded-tl-sm bg-neutral-100 px-4 py-3">

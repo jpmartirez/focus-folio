@@ -30,7 +30,7 @@ export default function RoomCard({ room, onDeleteRequest }: RoomCardProps) {
 				<div
 					className={cn(
 						"card flex flex-col gap-4 p-6 cursor-pointer transition-all duration-250",
-						hovered && "shadow-md translate-y-[-3px]"
+						hovered && "shadow-md -bg-conic-30translate-y-0.75"
 					)}
 				>
 					{/* Icon */}
