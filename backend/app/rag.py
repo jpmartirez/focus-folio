@@ -145,7 +145,7 @@ def _get_retriever(room_id: str):
         search_type="similarity_score_threshold",
         search_kwargs={
             "k": 6,
-            "score_threshold": 0.80,
+            "score_threshold": 0.60,
         },
     )
 
